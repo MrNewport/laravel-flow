@@ -1,0 +1,48 @@
+{
+    "name": "mrnewport/laravel-flow",
+    "description": "Production-ready, domain-agnostic flow system for Laravel with multi-step, assignment, events, and notifications.",
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "MrNewport"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "illuminate/support": "^11.0",
+        "illuminate/database": "^11.0",
+        "illuminate/notifications": "^11.0",
+        "illuminate/events": "^11.0",
+        "spatie/laravel-package-tools": "^1.9",
+        "pestphp/pest": "^3.7",
+        "pestphp/pest-plugin-laravel": "^3.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^9.9"
+    },
+    "autoload": {
+        "psr-4": {
+            "MrNewport\\LaravelFlow\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "MrNewport\\LaravelFlow\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "MrNewport\\LaravelFlow\\Providers\\FlowServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
