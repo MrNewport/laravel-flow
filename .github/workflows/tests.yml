@@ -1,0 +1,83 @@
+name: Package compatibility
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {php: '8.2', laravel: '^12.0', testbench: '^10.0'}
+          - {php: '8.3', laravel: '^13.0', testbench: '^11.0'}
+          - {php: '8.4', laravel: '^13.0', testbench: '^11.0'}
+          - {php: '8.5', laravel: '^13.0', testbench: '^11.0'}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+          extensions: pdo_sqlite, dom, mbstring
+          coverage: none
+      - run: composer validate --strict
+      - name: Resolve supported framework
+        env:
+          LARAVEL_VERSION: ${{ matrix.laravel }}
+          TESTBENCH_VERSION: ${{ matrix.testbench }}
+        run: |
+          composer require --dev "laravel/framework:$LARAVEL_VERSION" "orchestra/testbench:$TESTBENCH_VERSION" --no-update
+          composer update --no-interaction --prefer-dist --no-progress
+      - run: composer test
+      - run: composer audit --locked --no-dev
+  consumer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {path: package}
+      - uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          extensions: pdo_sqlite, dom, mbstring
+          coverage: none
+      - run: composer create-project laravel/laravel:^13.0 host --no-install --no-scripts --no-interaction
+      - working-directory: host
+        run: |
+          php -r '$p=json_decode(file_get_contents("composer.json"),true); unset($p["require-dev"]); $p["repositories"]=[["type"=>"path","url"=>"../package","options"=>["symlink"=>false,"versions"=>["mrnewport/laravel-flow"=>"2.0.0"]]]]; $p["require"]["mrnewport/laravel-flow"]="^2.0"; file_put_contents("composer.json",json_encode($p,JSON_PRETTY_PRINT));'
+          cp .env.example .env
+          touch database/database.sqlite
+          composer update --no-dev --no-interaction --prefer-dist --no-progress
+          php artisan key:generate
+          php artisan package:discover
+          php artisan config:cache
+          php artisan route:cache
+          php artisan migrate --force
+          php artisan migrate:rollback --force
+          php -r 'require "vendor/autoload.php"; if(class_exists("Pest\\TestSuite") || class_exists("PHPUnit\\Framework\\TestCase")) exit(1);'
+  mysql:
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: package-test-only
+          MYSQL_DATABASE: package_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ppackage-test-only"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          extensions: pdo_mysql, pdo_sqlite, dom, mbstring
+          coverage: none
+      - run: composer update --no-interaction --prefer-dist --no-progress
+      - run: vendor/bin/pest --filter='migrates and rolls back on MySQL'
+        env:
+          MYSQL_TEST_DATABASE: package_test
+          MYSQL_TEST_PASSWORD: package-test-only

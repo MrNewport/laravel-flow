@@ -9,7 +9,7 @@ use MrNewport\LaravelFlow\Tests\TestCase;
 
 class FlowManagerMultiTransitionsTest extends TestCase
 {
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function step_has_two_actions_approve_and_reject()
     {
         FlowStep::create(['id'=>'draft','notify'=>false]);
@@ -36,7 +36,7 @@ class FlowManagerMultiTransitionsTest extends TestCase
         // Then each one is created. But typically action is unique
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function if_multiple_transitions_match_same_action_all_are_created()
     {
         // Rare scenario: same step_id, same action, different next_step_id

@@ -8,7 +8,7 @@ use MrNewport\LaravelFlow\Tests\TestCase;
 
 class FlowManagerAssignmentTest extends TestCase
 {
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function start_flow_auto_assigns_using_step_assignment_strategy()
     {
         FlowStep::create([
@@ -30,7 +30,7 @@ class FlowManagerAssignmentTest extends TestCase
         $this->assertEquals('10',$assignees[1]->assignee_value);
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function action_step_creates_next_step_with_its_strategy()
     {
         FlowStep::create(['id'=>'start','assignment_strategy'=>null]);
@@ -61,7 +61,7 @@ class FlowManagerAssignmentTest extends TestCase
         $this->assertEquals('user@example.com',$assignees[0]->assignee_value);
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function reassign_step_works_for_multi_user()
     {
         $step = FlowStep::create([
@@ -92,7 +92,7 @@ class FlowManagerAssignmentTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function reassign_fails_if_not_in_assignees()
     {
         $step = FlowStep::create([

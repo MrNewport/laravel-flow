@@ -22,25 +22,27 @@ class FlowManager
      */
     public static function startFlow(string $stepId, $entity): FlowInstance
     {
-        $instance = FlowInstance::create([
-            'current_step_id' => $stepId,
-            'model_type'      => get_class($entity),
-            'model_id'        => $entity->getKey()
-        ]);
+        return (new FlowInstance())->getConnection()->transaction(function () use ($stepId, $entity) {
+            $instance = FlowInstance::create([
+                'current_step_id' => $stepId,
+                'model_type'      => get_class($entity),
+                'model_id'        => $entity->getKey()
+            ]);
 
-        $step = FlowStep::findOrFail($stepId);
+            $step = FlowStep::findOrFail($stepId);
 
-        $instanceStep = FlowInstanceStep::create([
-            'flow_instance_id'=>$instance->id,
-            'step_id'=>$stepId
-        ]);
+            $instanceStep = FlowInstanceStep::create([
+                'flow_instance_id'=>$instance->id,
+                'step_id'=>$stepId
+            ]);
 
-        if($step->assignment_strategy) {
-            $strategy = AssignmentStrategyFactory::make($step->assignment_strategy,$step->assignment_params??[]);
-            $strategy->assign($instanceStep);
-        }
+            if($step->assignment_strategy) {
+                $strategy = AssignmentStrategyFactory::make($step->assignment_strategy,$step->assignment_params??[]);
+                $strategy->assign($instanceStep);
+            }
 
-        return $instance;
+            return $instance;
+        });
     }
 
     /**
@@ -48,49 +50,56 @@ class FlowManager
      */
     public static function actionStep(FlowInstanceStep $currentStep, string $action): array
     {
-        $currentStep->completeStep($action);
-        $instance = $currentStep->flowInstance;
-
-        $transitions = FlowTransition::where('step_id',$currentStep->step_id)
-            ->where('action',$action)->get();
-
-        if($transitions->isEmpty()) {
-            return [];
-        }
-
-        $createdSteps = [];
-        foreach($transitions as $tx) {
-            if($tx->next_step_id==='END') {
-                $instance->update(['current_step_id'=>'END']);
-                Event::dispatch(new FlowActionEvent($currentStep,$action,null));
-                $createdSteps[] = null;
-            } else {
-                $nextStep = FlowStep::findOrFail($tx->next_step_id);
-                $newStepRecord = FlowInstanceStep::create([
-                    'flow_instance_id'=>$instance->id,
-                    'step_id'=>$tx->next_step_id
-                ]);
-                $instance->update(['current_step_id'=>$tx->next_step_id]);
-
-                if($nextStep->assignment_strategy) {
-                    $strategy = AssignmentStrategyFactory::make(
-                        $nextStep->assignment_strategy,
-                        $nextStep->assignment_params??[]
-                    );
-                    $strategy->assign($newStepRecord);
-                }
-
-                if($nextStep->notify) {
-                    // You can fire notifications for new step
-                    // e.g. Notification::send(...)
-                }
-
-                Event::dispatch(new FlowActionEvent($currentStep,$action,$newStepRecord));
-                $createdSteps[] = $newStepRecord;
+        return $currentStep->getConnection()->transaction(function () use ($currentStep, $action) {
+            $currentStep = $currentStep->newQuery()->lockForUpdate()->findOrFail($currentStep->getKey());
+            if ($currentStep->finished_at !== null) {
+                throw new \LogicException('This workflow step is already completed.');
             }
-        }
 
-        return $createdSteps;
+            $currentStep->completeStep($action);
+            $instance = $currentStep->flowInstance;
+
+            $transitions = FlowTransition::where('step_id',$currentStep->step_id)
+                ->where('action',$action)->get();
+
+            if($transitions->isEmpty()) {
+                return [];
+            }
+
+            $createdSteps = [];
+            foreach($transitions as $tx) {
+                if($tx->next_step_id==='END') {
+                    $instance->update(['current_step_id'=>'END']);
+                    Event::dispatch(new FlowActionEvent($currentStep,$action,null));
+                    $createdSteps[] = null;
+                } else {
+                    $nextStep = FlowStep::findOrFail($tx->next_step_id);
+                    $newStepRecord = FlowInstanceStep::create([
+                        'flow_instance_id'=>$instance->id,
+                        'step_id'=>$tx->next_step_id
+                    ]);
+                    $instance->update(['current_step_id'=>$tx->next_step_id]);
+
+                    if($nextStep->assignment_strategy) {
+                        $strategy = AssignmentStrategyFactory::make(
+                            $nextStep->assignment_strategy,
+                            $nextStep->assignment_params??[]
+                        );
+                        $strategy->assign($newStepRecord);
+                    }
+
+                    if($nextStep->notify) {
+                        // You can fire notifications for new step
+                        // e.g. Notification::send(...)
+                    }
+
+                    Event::dispatch(new FlowActionEvent($currentStep,$action,$newStepRecord));
+                    $createdSteps[] = $newStepRecord;
+                }
+            }
+
+            return $createdSteps;
+        });
     }
 
     /**

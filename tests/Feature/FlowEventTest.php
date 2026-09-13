@@ -11,7 +11,7 @@ use MrNewport\LaravelFlow\Tests\TestCase;
 
 class FlowEventTest extends TestCase
 {
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function flow_action_event_is_dispatched_when_a_step_is_completed()
     {
         Event::fake([FlowActionEvent::class]);

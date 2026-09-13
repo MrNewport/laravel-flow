@@ -1,3 +1,24 @@
+# Laravel Flow
+
+Current release: **2.0.0**. Supported installations: Laravel 12 (PHP 8.2+) and Laravel 13 (PHP 8.3+). CI verifies supported PHP/Laravel combinations. Earlier Laravel versions should remain on the previous major release.
+
+Laravel 12/13; package configuration, migrations and notification view discovery now use actual paths. Removed the unnecessary package-tools dependency and moved testing tools to development requirements. Start/transition operations are transactional; duplicate completed-step transitions are rejected; events are dispatched after commit.
+
+```sh
+composer require mrnewport/laravel-flow:^2.0
+composer test # from the package checkout; tests use isolated fixtures
+```
+
+GitHub source and tags are published first. Until the release is indexed on Packagist, add this repository as a Composer VCS repository. Never install test dependencies in your production application's require section.
+
+Run `php artisan migrate` after upgrading to apply package migrations. Back up application data before normal production migrations.
+
+## Transition semantics
+
+`FlowManager::startFlow()` and `actionStep()` are transactional. Repeating an already completed step throws `LogicException`; callers should handle duplicate delivery explicitly. Action events dispatch after transaction commit. The existing `notify` flag is metadata; applications still choose recipients and send `FlowBaseNotification` from their event listeners. The package does not send unsolicited notifications automatically.
+
+## Existing API reference
+
 
 # mrnewport/laravel-flow
 
@@ -18,50 +39,50 @@ Everything is **infinitely expandable**—with no forced domain or role logic. P
 
 ## Table of Contents
 
-1. [Requirements](#requirements)  
-2. [Installation](#installation)  
-3. [Configuration](#configuration)  
-4. [Database Structure](#database-structure)  
-5. [Core Concepts](#core-concepts)  
-   - [FlowStep](#flowstep)  
-   - [FlowTransition](#flowtransition)  
-   - [FlowInstance](#flowinstance)  
-   - [FlowInstanceStep](#flowinstancestep)  
-   - [FlowStepAssignee](#flowstepassignee)  
-6. [Assignment Strategies](#assignment-strategies)  
-   - [SingleUserStrategy](#singleuserstrategy)  
-   - [MultiUserStrategy](#multiuserstrategy)  
-   - [EmailListStrategy](#emailliststrategy)  
-   - [Reassigning a Step](#reassigning-a-step)  
-7. [Using the FlowManager](#using-the-flowmanager)  
-   - [Multi-Step Example with More Steps](#multi-step-example-with-more-steps)  
-   - [Starting a Flow](#starting-a-flow)  
-   - [Completing a Step with an Action](#completing-a-step-with-an-action)  
-   - [Multiple Transitions](#multiple-transitions)  
-   - [End Step](#end-step)  
-   - [Events](#events)  
-   - [Notifications](#notifications)  
-8. [Console Commands](#console-commands)  
-   - [DefineStepCommand](#definestepcommand)  
-9. [Flowable Trait](#flowable-trait)  
-10. [Advanced Customization](#advanced-customization)  
-    - [1. Custom Assignment Strategies](#1-custom-assignment-strategies)  
-    - [2. Event Listeners for Step+Action Logic](#2-event-listeners-for-stepaction-logic)  
-    - [3. Larger Example: 6+ Steps, Complex Branching](#3-larger-example-6-steps-complex-branching)  
-    - [4. Rejection Actions and External Approvals](#4-rejection-actions-and-external-approvals)  
-    - [5. Integrating with External Services](#5-integrating-with-external-services)  
-    - [6. Additional Notifications & Channels](#6-additional-notifications--channels)  
-11. [Testing](#testing)  
-12. [License](#license)  
+1. [Requirements](#requirements)
+2. [Installation](#installation)
+3. [Configuration](#configuration)
+4. [Database Structure](#database-structure)
+5. [Core Concepts](#core-concepts)
+   - [FlowStep](#flowstep)
+   - [FlowTransition](#flowtransition)
+   - [FlowInstance](#flowinstance)
+   - [FlowInstanceStep](#flowinstancestep)
+   - [FlowStepAssignee](#flowstepassignee)
+6. [Assignment Strategies](#assignment-strategies)
+   - [SingleUserStrategy](#singleuserstrategy)
+   - [MultiUserStrategy](#multiuserstrategy)
+   - [EmailListStrategy](#emailliststrategy)
+   - [Reassigning a Step](#reassigning-a-step)
+7. [Using the FlowManager](#using-the-flowmanager)
+   - [Multi-Step Example with More Steps](#multi-step-example-with-more-steps)
+   - [Starting a Flow](#starting-a-flow)
+   - [Completing a Step with an Action](#completing-a-step-with-an-action)
+   - [Multiple Transitions](#multiple-transitions)
+   - [End Step](#end-step)
+   - [Events](#events)
+   - [Notifications](#notifications)
+8. [Console Commands](#console-commands)
+   - [DefineStepCommand](#definestepcommand)
+9. [Flowable Trait](#flowable-trait)
+10. [Advanced Customization](#advanced-customization)
+    - [1. Custom Assignment Strategies](#1-custom-assignment-strategies)
+    - [2. Event Listeners for Step+Action Logic](#2-event-listeners-for-stepaction-logic)
+    - [3. Larger Example: 6+ Steps, Complex Branching](#3-larger-example-6-steps-complex-branching)
+    - [4. Rejection Actions and External Approvals](#4-rejection-actions-and-external-approvals)
+    - [5. Integrating with External Services](#5-integrating-with-external-services)
+    - [6. Additional Notifications & Channels](#6-additional-notifications--channels)
+11. [Testing](#testing)
+12. [License](#license)
 
 ---
 
 ## Requirements
 
-- **Laravel** ^11.0  
-- **PHP** ^8.1  
-- **Illuminate** (events, notifications, database)  
-- **spatie/laravel-package-tools** ^1.9  
+- **Laravel** ^12.0 or ^13.0
+- **PHP** ^8.1
+- **Illuminate** (events, notifications, database)
+- **spatie/laravel-package-tools** ^1.9
 
 ---
 

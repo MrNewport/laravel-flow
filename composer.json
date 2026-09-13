@@ -1,6 +1,6 @@
 {
     "name": "mrnewport/laravel-flow",
-    "description": "Production-ready, domain-agnostic flow system for Laravel with multi-step, assignment, events, and notifications.",
+    "description": "Transactional multi-step workflows with assignment strategies and transition events for Laravel.",
     "license": "MIT",
     "type": "library",
     "authors": [
@@ -9,17 +9,16 @@
         }
     ],
     "require": {
-        "php": ">=8.1",
-        "illuminate/support": "^11.0",
-        "illuminate/database": "^11.0",
-        "illuminate/notifications": "^11.0",
-        "illuminate/events": "^11.0",
-        "spatie/laravel-package-tools": "^1.9",
-        "pestphp/pest": "^3.7",
-        "pestphp/pest-plugin-laravel": "^3.0"
+        "php": "^8.2",
+        "illuminate/support": "^12.0 || ^13.0",
+        "illuminate/database": "^12.0 || ^13.0",
+        "illuminate/notifications": "^12.0 || ^13.0",
+        "illuminate/events": "^12.0 || ^13.0"
     },
     "require-dev": {
-        "orchestra/testbench": "^9.9"
+        "orchestra/testbench": "^10.0 || ^11.0",
+        "pestphp/pest": "^3.8",
+        "mockery/mockery": "^1.6"
     },
     "autoload": {
         "psr-4": {
@@ -44,5 +43,8 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "scripts": {
+        "test": "pest"
+    }
 }

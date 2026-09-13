@@ -9,7 +9,7 @@ use MrNewport\LaravelFlow\Tests\TestCase;
 
 class FlowManagerBasicTest extends TestCase
 {
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function it_starts_a_flow_instance_on_a_step()
     {
         FlowStep::create(['id'=>'startStep','name'=>'Start','notify'=>false]);
@@ -28,7 +28,7 @@ class FlowManagerBasicTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function action_step_closes_current_and_creates_next()
     {
         FlowStep::create(['id'=>'supplier_submit','notify'=>false]);
@@ -55,7 +55,7 @@ class FlowManagerBasicTest extends TestCase
         $this->assertEquals('supplier_submit',$instance->current_step_id);
     }
 
-    /** @test */
+    #[\PHPUnit\Framework\Attributes\Test]
     public function action_step_with_no_transitions_does_nothing()
     {
         FlowStep::create(['id'=>'no_next','notify'=>false]);

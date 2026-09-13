@@ -6,7 +6,7 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use MrNewport\LaravelFlow\Models\FlowInstanceStep;
 
-class FlowActionEvent
+class FlowActionEvent implements \Illuminate\Contracts\Events\ShouldDispatchAfterCommit
 {
     use Dispatchable, SerializesModels;
 

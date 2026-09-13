@@ -2,28 +2,26 @@
 
 namespace MrNewport\LaravelFlow\Providers;
 
-use Spatie\LaravelPackageTools\Package;
-use Spatie\LaravelPackageTools\PackageServiceProvider;
+use Illuminate\Support\ServiceProvider;
 use MrNewport\LaravelFlow\Commands\DefineStepCommand;
 
-class FlowServiceProvider extends PackageServiceProvider
+class FlowServiceProvider extends ServiceProvider
 {
-    public function configurePackage(Package $package): void
+    public function register(): void
     {
-        $package
-            ->name('mrnewport-laravel-flow')
-            ->hasConfigFile('flow')
-            ->hasMigrations(['2025_01_01_000000_create_flow_tables'])
-            ->hasCommands([DefineStepCommand::class])
-            ->hasViews();
+        $this->mergeConfigFrom(__DIR__.'/../config/flow.php', 'flow');
     }
 
     public function boot()
     {
-        parent::boot();
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'laravel-flow');
+        if ($this->app->runningInConsole()) {
+            $this->commands([DefineStepCommand::class]);
+        }
 
         $this->publishes([
-            __DIR__.'/config/flow.php' => config_path('flow.php'),
+            __DIR__.'/../config/flow.php' => config_path('flow.php'),
         ], 'flow-config');
 
         $this->publishes([

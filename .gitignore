@@ -1,3 +1,10 @@
 
 composer.lock
 /vendor
+
+/vendor/
+/composer.lock
+/.phpunit.cache/
+/.phpunit.result.cache
+/.env
+/.env.*
