@@ -5,6 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 
 it('migrates and rolls back on MySQL', function () {
     if (getenv('MYSQL_TEST_DATABASE') !== 'package_test') $this->markTestSkipped('Disposable MySQL runner only.');
+    $originalConnection = config('database.default');
     config(['database.default' => 'mysql', 'database.connections.mysql' => [
         'driver' => 'mysql', 'host' => '127.0.0.1', 'port' => 3306,
         'database' => 'package_test', 'username' => 'root', 'password' => getenv('MYSQL_TEST_PASSWORD'),
@@ -19,5 +20,7 @@ it('migrates and rolls back on MySQL', function () {
     } finally {
         Schema::dropIfExists('users');
         Schema::dropIfExists('migrations');
+        config(['database.default' => $originalConnection]);
+        app('migrator')->setConnection($originalConnection);
     }
 });
