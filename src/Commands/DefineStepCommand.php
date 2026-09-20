@@ -3,6 +3,7 @@
 namespace MrNewport\LaravelFlow\Commands;
 
 use Illuminate\Console\Command;
+use MrNewport\LaravelFlow\Assignments\AssignmentStrategyFactory;
 use MrNewport\LaravelFlow\Models\FlowStep;
 use MrNewport\LaravelFlow\Models\FlowTransition;
 
@@ -16,7 +17,7 @@ class DefineStepCommand extends Command
                             {stepId : Unique ID for this step}
                             {name? : Optional display name}
                             {--notify= : true/false}
-                            {--strategy= : assignment strategy name (single_user,multi_user,email_list,etc.)}
+                            {--strategy= : assignment strategy name (single_user,multi_user,email_list)}
                             {--params= : JSON for assignment_params}
                             {--actions= : comma-separated transitions like "approve:next,reject:END"}';
 
@@ -30,6 +31,16 @@ class DefineStepCommand extends Command
         $strategy = $this->option('strategy') ?: null;
         $params   = $this->parseParams($this->option('params'));
         $actions  = $this->option('actions');
+
+        if ($strategy !== null) {
+            try {
+                AssignmentStrategyFactory::make($strategy, $params);
+            } catch (\InvalidArgumentException $exception) {
+                $this->error($exception->getMessage());
+
+                return self::FAILURE;
+            }
+        }
 
         // 1) Update or create the FlowStep row
         FlowStep::updateOrCreate(

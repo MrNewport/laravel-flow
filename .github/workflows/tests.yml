@@ -33,6 +33,10 @@ jobs:
       - run: composer audit --locked --no-dev
   consumer:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        morph-key-type: [int, uuid, ulid]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {path: package}
@@ -44,8 +48,11 @@ jobs:
           coverage: none
       - run: composer create-project laravel/laravel:^13.0 host --no-install --no-scripts --no-interaction
       - working-directory: host
+        env:
+          FLOW_MORPH_KEY_TYPE: ${{ matrix.morph-key-type }}
         run: |
-          php -r '$p=json_decode(file_get_contents("composer.json"),true); unset($p["require-dev"]); $p["repositories"]=[["type"=>"path","url"=>"../package","options"=>["symlink"=>false,"versions"=>["mrnewport/laravel-flow"=>"2.0.0"]]]]; $p["require"]["mrnewport/laravel-flow"]="^2.0"; file_put_contents("composer.json",json_encode($p,JSON_PRETTY_PRINT));'
+          php -r '$p=json_decode(file_get_contents("composer.json"),true); unset($p["require-dev"]); $p["repositories"]=[["type"=>"path","url"=>"../package","options"=>["symlink"=>false,"versions"=>["mrnewport/laravel-flow"=>"2.1.0"]]]]; $p["require"]["mrnewport/laravel-flow"]="^2.1"; file_put_contents("composer.json",json_encode($p,JSON_PRETTY_PRINT));'
+          php -r 'file_put_contents("config/flow.php", "<?php return ".var_export(["morph_key_type"=>getenv("FLOW_MORPH_KEY_TYPE")],true).";");'
           cp .env.example .env
           touch database/database.sqlite
           composer update --no-dev --no-interaction --prefer-dist --no-progress

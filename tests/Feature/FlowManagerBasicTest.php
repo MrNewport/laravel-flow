@@ -56,7 +56,7 @@ class FlowManagerBasicTest extends TestCase
     }
 
     #[\PHPUnit\Framework\Attributes\Test]
-    public function action_step_with_no_transitions_does_nothing()
+    public function action_step_with_no_transitions_is_rejected_without_changing_the_step()
     {
         FlowStep::create(['id'=>'no_next','notify'=>false]);
         $entity = new class { public $id=303; public function getKey(){return $this->id;}};
@@ -64,12 +64,16 @@ class FlowManagerBasicTest extends TestCase
         $instance = FlowManager::startFlow('no_next',$entity);
         $oldStep = $instance->steps()->whereNull('finished_at')->first();
 
-        $result = FlowManager::actionStep($oldStep,'something');
-        $this->assertEmpty($result);
+        try {
+            FlowManager::actionStep($oldStep,'something');
+            $this->fail('An undefined action must be rejected.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertSame('No transition is defined for this workflow action.', $exception->getMessage());
+        }
 
         $oldStep->refresh();
-        $this->assertEquals('something',$oldStep->action_taken);
-        $this->assertNotNull($oldStep->finished_at);
+        $this->assertNull($oldStep->action_taken);
+        $this->assertNull($oldStep->finished_at);
 
         $instance->refresh();
         $this->assertEquals('no_next',$instance->current_step_id); // still same

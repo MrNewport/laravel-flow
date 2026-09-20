@@ -8,6 +8,15 @@ use MrNewport\LaravelFlow\Tests\TestCase;
 
 class DefineStepCommandTest extends TestCase
 {
+    public function test_rejects_an_unsupported_assignment_strategy_before_writing(): void
+    {
+        $this->artisan('flow:define-step unsupported --strategy=custom_review')
+            ->expectsOutput('Unsupported flow assignment strategy: custom_review')
+            ->assertExitCode(1);
+
+        $this->assertDatabaseMissing('flow_steps', ['id' => 'unsupported']);
+    }
+
     public function test_creates_new_step_with_defaults()
     {
         $this->artisan('flow:define-step alpha_import')

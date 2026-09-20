@@ -3,6 +3,13 @@
 return [
 
     /*
+    | The related model's primary-key type: int, uuid, or ulid.
+    | Set before the initial migration. Changing this setting does not alter
+    | existing tables; existing installations require a reviewed migration.
+    */
+    'morph_key_type' => 'int',
+
+    /*
     |--------------------------------------------------------------------------
     | Default Eloquent User Model
     |--------------------------------------------------------------------------

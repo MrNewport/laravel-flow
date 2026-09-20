@@ -56,15 +56,15 @@ class FlowManager
                 throw new \LogicException('This workflow step is already completed.');
             }
 
-            $currentStep->completeStep($action);
-            $instance = $currentStep->flowInstance;
-
             $transitions = FlowTransition::where('step_id',$currentStep->step_id)
                 ->where('action',$action)->get();
 
             if($transitions->isEmpty()) {
-                return [];
+                throw new \InvalidArgumentException('No transition is defined for this workflow action.');
             }
+
+            $currentStep->completeStep($action);
+            $instance = $currentStep->flowInstance;
 
             $createdSteps = [];
             foreach($transitions as $tx) {

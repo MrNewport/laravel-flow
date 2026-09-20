@@ -9,6 +9,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $morphKeyType = config('flow.morph_key_type', 'int');
+        if (! in_array($morphKeyType, ['int', 'uuid', 'ulid'], true)) {
+            throw new InvalidArgumentException('flow.morph_key_type must be int, uuid, or ulid.');
+        }
+
         Schema::create('flow_steps', function (Blueprint $table) {
             $table->string('id',100)->primary();
             $table->string('name',255);
@@ -30,11 +35,15 @@ return new class extends Migration
             $table->unique(['step_id','action','next_step_id'],'flow_transitions_uidx');
         });
 
-        Schema::create('flow_instances', function (Blueprint $table) {
+        Schema::create('flow_instances', function (Blueprint $table) use ($morphKeyType) {
             $table->bigIncrements('id');
             $table->string('current_step_id',100)->index();
             $table->string('model_type');
-            $table->unsignedBigInteger('model_id');
+            match ($morphKeyType) {
+                'uuid' => $table->uuid('model_id'),
+                'ulid' => $table->ulid('model_id'),
+                default => $table->unsignedBigInteger('model_id'),
+            };
             $table->timestamps();
         });
 

@@ -24,8 +24,5 @@ class FlowServiceProvider extends ServiceProvider
             __DIR__.'/../config/flow.php' => config_path('flow.php'),
         ], 'flow-config');
 
-        $this->publishes([
-            __DIR__.'/../resources/stubs' => base_path('stubs/laravel-flow'),
-        ], 'flow-stubs');
     }
 }

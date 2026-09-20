@@ -1,485 +1,180 @@
 # Laravel Flow
 
-Current release: **2.0.0**. Supported installations: Laravel 12 (PHP 8.2+) and Laravel 13 (PHP 8.3+). CI verifies supported PHP/Laravel combinations. Earlier Laravel versions should remain on the previous major release.
+Release **2.1.0**. Transactional workflow steps, transitions, assignment records, and action events for Laravel.
 
-Laravel 12/13; package configuration, migrations and notification view discovery now use actual paths. Removed the unnecessary package-tools dependency and moved testing tools to development requirements. Start/transition operations are transactional; duplicate completed-step transitions are rejected; events are dispatched after commit.
+| Laravel | PHP |
+| --- | --- |
+| 12 | 8.2+ |
+| 13 | 8.3+ |
 
-```sh
-composer require mrnewport/laravel-flow:^2.0
-composer test # from the package checkout; tests use isolated fixtures
-```
-
-GitHub source and tags are published first. Until the release is indexed on Packagist, add this repository as a Composer VCS repository. Never install test dependencies in your production application's require section.
-
-Run `php artisan migrate` after upgrading to apply package migrations. Back up application data before normal production migrations.
-
-## Transition semantics
-
-`FlowManager::startFlow()` and `actionStep()` are transactional. Repeating an already completed step throws `LogicException`; callers should handle duplicate delivery explicitly. Action events dispatch after transaction commit. The existing `notify` flag is metadata; applications still choose recipients and send `FlowBaseNotification` from their event listeners. The package does not send unsolicited notifications automatically.
-
-## Existing API reference
-
-
-# mrnewport/laravel-flow
-
-A **domain-agnostic** flow/workflow package for Laravel. It allows:
-
-- **FlowStep** definitions with optional assignment strategies and notifications.
-- **FlowTransition** actions that link one step to the next.
-- **FlowInstance** tracking each entity’s position in the flow.
-- **FlowInstanceStep** logging each step taken by that entity.
-- A **pivot-based assignment** table (`flow_step_assignees`), so you can assign one or many users or external emails.
-- **Reassign** logic if someone else needs to handle the step.
-- **Multi-step** transitions (one action can lead to multiple next steps).
-- **Laravel events** and notifications for each action.
-
-Everything is **infinitely expandable**—with no forced domain or role logic. Perfect for multi-approval flows, complex multi-step processes, or advanced e-sign style flows.
-
----
-
-## Table of Contents
-
-1. [Requirements](#requirements)
-2. [Installation](#installation)
-3. [Configuration](#configuration)
-4. [Database Structure](#database-structure)
-5. [Core Concepts](#core-concepts)
-   - [FlowStep](#flowstep)
-   - [FlowTransition](#flowtransition)
-   - [FlowInstance](#flowinstance)
-   - [FlowInstanceStep](#flowinstancestep)
-   - [FlowStepAssignee](#flowstepassignee)
-6. [Assignment Strategies](#assignment-strategies)
-   - [SingleUserStrategy](#singleuserstrategy)
-   - [MultiUserStrategy](#multiuserstrategy)
-   - [EmailListStrategy](#emailliststrategy)
-   - [Reassigning a Step](#reassigning-a-step)
-7. [Using the FlowManager](#using-the-flowmanager)
-   - [Multi-Step Example with More Steps](#multi-step-example-with-more-steps)
-   - [Starting a Flow](#starting-a-flow)
-   - [Completing a Step with an Action](#completing-a-step-with-an-action)
-   - [Multiple Transitions](#multiple-transitions)
-   - [End Step](#end-step)
-   - [Events](#events)
-   - [Notifications](#notifications)
-8. [Console Commands](#console-commands)
-   - [DefineStepCommand](#definestepcommand)
-9. [Flowable Trait](#flowable-trait)
-10. [Advanced Customization](#advanced-customization)
-    - [1. Custom Assignment Strategies](#1-custom-assignment-strategies)
-    - [2. Event Listeners for Step+Action Logic](#2-event-listeners-for-stepaction-logic)
-    - [3. Larger Example: 6+ Steps, Complex Branching](#3-larger-example-6-steps-complex-branching)
-    - [4. Rejection Actions and External Approvals](#4-rejection-actions-and-external-approvals)
-    - [5. Integrating with External Services](#5-integrating-with-external-services)
-    - [6. Additional Notifications & Channels](#6-additional-notifications--channels)
-11. [Testing](#testing)
-12. [License](#license)
-
----
-
-## Requirements
-
-- **Laravel** ^12.0 or ^13.0
-- **PHP** ^8.1
-- **Illuminate** (events, notifications, database)
-- **spatie/laravel-package-tools** ^1.9
-
----
+The package depends on Illuminate support, database, notifications, and events. Testbench and Pest are development dependencies. See the GitHub Actions compatibility matrix for tested combinations.
 
 ## Installation
 
-1. **Install** via Composer:
-   ```bash
-   composer require mrnewport/laravel-flow
-   ```
+```sh
+composer require mrnewport/laravel-flow:^2.1
+```
 
-2. (Optional) **Publish** config & stubs:
-   ```bash
-   php artisan vendor:publish --provider="MrNewport\\LaravelFlow\\FlowServiceProvider" --tag=flow-config
-   php artisan vendor:publish --provider="MrNewport\\LaravelFlow\\FlowServiceProvider" --tag=flow-stubs
-   ```
+If the release is not yet indexed on Packagist, configure the published repository as a Composer VCS repository:
 
-3. **Migrate**:
-   ```bash
-   php artisan migrate
-   ```
-   This creates `flow_steps`, `flow_transitions`, `flow_instances`, `flow_instance_steps`, and `flow_step_assignees`.
+```sh
+composer config repositories.laravel-flow vcs https://github.com/MrNewport/laravel-flow
+composer require mrnewport/laravel-flow:^2.1
+```
 
----
+Laravel discovers `MrNewport\LaravelFlow\Providers\FlowServiceProvider` automatically. Publish optional configuration with:
 
-## Configuration
+```sh
+php artisan vendor:publish --provider='MrNewport\LaravelFlow\Providers\FlowServiceProvider' --tag=flow-config
+```
 
-After publishing, open `config/flow.php`:
+### Related model key types
+
+Before the **first** package migration, choose the primary-key type used by workflow subjects in `config/flow.php`:
+
 ```php
 return [
-    'user_model' => \App\Models\User::class,
-    'rejection_actions' => ['reject','cancel'],
+    'morph_key_type' => 'int', // int (default), uuid, or ulid
+    'user_model' => App\Models\User::class,
+    'rejection_actions' => ['reject', 'cancel'],
 ];
 ```
-- **`user_model`**: If your assignment strategies reference Eloquent users, update here.
-- **`rejection_actions`**: Flow actions that count as rejections/cancellations.
 
----
+Then run `php artisan migrate`. The setting determines `flow_instances.model_id`: unsigned bigint, UUID, or ULID. The package's own instance and step IDs remain unsigned bigints. Unsupported settings fail before any package tables are created.
 
-## Database Structure
+**Changing configuration does not convert existing tables.** Existing installations require a separately reviewed application migration and data conversion plan. Back up production data before migrations; do not roll back production tables to change key type. One installation uses one configured subject-key type; mixed key types are not automatically converted.
 
-1. **`flow_steps`**: Each distinct step.
-    - `id`: The string identifier.
-    - `name`: A descriptive title.
-    - `notify`: If true, the system can automatically handle notifications.
-    - `assignment_strategy`: e.g. `'single_user'`, `'multi_user'`, `'email_list'`
-    - `assignment_params`: JSON object for that strategy.
+`user_model` and `rejection_actions` are available to application integrations; the manager does not use them to enforce permissions or special cancellation behavior.
 
-2. **`flow_transitions`**: Action-based transitions.
-    - `step_id`: The current step’s ID.
-    - `action`: e.g. `'approve'`, `'reject'`, `'submit'`.
-    - `next_step_id`: The next step triggered by that action.
+## Define a workflow
 
-3. **`flow_instances`**: Tracks which step a particular model is on.
-    - `current_step_id`: The step the entity is currently at.
-    - `model_type`, `model_id`: Polymorphic references to your Eloquent model (e.g. `App\Models\Post`).
-
-4. **`flow_instance_steps`**: Log of each step in a particular instance.
-    - `flow_instance_id`: references the `flow_instances` row.
-    - `step_id`: references `flow_steps`.
-    - `action_taken`: the action used to complete the step, if any.
-    - `started_at`, `finished_at`: timestamps.
-
-5. **`flow_step_assignees`**: Pivot storing who must do a step.
-    - `flow_instance_step_id`: The instance step that’s assigned.
-    - `assignee_type`: `'user'`, `'email'`, `'token'`, etc.
-    - `assignee_value`: The user ID, email address, or external reference.
-
----
-
-## Core Concepts
-
-### FlowStep
-
-An individual step in your flow. Example IDs: `'draft_review'`, `'supplier_upload'`, `'marketing_approval'`. Each step can specify:
-
-- **`notify`**: If `true`, the system or an event listener can trigger notifications automatically.
-- **`assignment_strategy`, `assignment_params`**: e.g. `'single_user'` with `{"user_id":8}`.
-
-### FlowTransition
-
-Defines an **action** from `step_id` → `next_step_id`. For example, `(draft_review, 'approve', marketing_approval)` means if user **approves** at `draft_review`, the next step is `marketing_approval`.
-
-### FlowInstance
-
-Records which step a **specific** entity (like a post, application, or user-submitted form) is currently at. Also references all steps that have been completed in `flow_instance_steps`.
-
-### FlowInstanceStep
-
-A record of a step within a FlowInstance. We store the timestamps and the action that completed it. If the step has an assignment strategy, it’s also assigned to users/emails in `flow_step_assignees`.
-
-### FlowStepAssignee
-
-Pivot that stores exactly who’s assigned to a step. For instance, `'assignee_type=user'`, `'assignee_value=3'` means user #3 must handle it.
-
----
-
-## Assignment Strategies
-
-The package includes **SingleUserStrategy**, **MultiUserStrategy**, and **EmailListStrategy**. They all implement `AssignmentStrategyInterface`, auto-populating `flow_step_assignees` whenever a new step is created.
-
-#### SingleUserStrategy
-- `assignment_params={"user_id":7}`
-- Creates a single pivot row: `(flow_instance_step_id, 'user', '7')`.
-
-#### MultiUserStrategy
-- `assignment_params={"user_ids":[7,8]}`
-- Creates multiple pivot rows for each user ID.
-
-#### EmailListStrategy
-- `assignment_params={"emails":["foo@bar.com","hello@domain.io"]}`
-- Creates pivot rows with `'assignee_type=email'`, `'assignee_value="foo@bar.com"` etc.
-
-### Reassigning a Step
-
-Use:
-```php
-FlowManager::reassignStep($stepInstance, $currentUser, $newAssignees);
-```
-- Checks if the strategy’s `canReassign($step, $currentUser)` is true, then calls `reassign($step, $newAssignees)`.
-- If it’s single-user strategy, we remove the old assignment, add the new. If multi-user, we remove or update accordingly.
-
----
-
-## Using the FlowManager
-
-Below are typical calls to **`FlowManager`**.
-
-### Multi-Step Example with More Steps
-
-Let’s define these steps:
-
-1. **`start_request`**
-2. **`manager_review`**
-3. **`director_approval`**
-4. **`supplier_upload`**
-5. **`marketing_check`**
-6. **`quality_assurance`**
-7. **`END`**
-
-We can have transitions like:
-
-- `(start_request, 'submit', manager_review)`
-- `(manager_review, 'reject', start_request)`
-- `(manager_review, 'approve', director_approval)`
-- `(director_approval, 'approve', supplier_upload)`
-- `(director_approval, 'reject', manager_review)`
-- `(supplier_upload, 'upload_done', marketing_check)`
-- `(marketing_check, 'changes_needed', supplier_upload)`
-- `(marketing_check, 'approve', quality_assurance)`
-- `(quality_assurance, 'approve', END)`
-- `(quality_assurance, 'reject', supplier_upload)`
-
-This means your flow can bounce around multiple times if rejections occur.
-
-### Starting a Flow
-
-1. **Define** your step with `flow:define-step` or code. For example:
-   ```bash
-   php artisan flow:define-step start_request "Start Request" --strategy=single_user --params='{"user_id":3}'
-   ```
-   Next define transitions:
-   ```bash
-   php artisan flow:define-step start_request --actions="submit:manager_review"
-   ```
-2. In your code:
-   ```php
-   $entity = new SomeModel(...);
-   $flowInstance = FlowManager::startFlow('start_request',$entity);
-
-   // This creates a FlowInstance row + FlowInstanceStep row
-   // If step "start_request" has single_user with user_id=3, it is assigned to user 3.
-   ```
-
-### Completing a Step with an Action
+Steps have stable string IDs. Transitions identify allowed actions. Version step IDs when changing a workflow that has active instances.
 
 ```php
-$currentStep = $flowInstance->steps()
-    ->whereNull('finished_at')
-    ->first();
+use MrNewport\LaravelFlow\Models\FlowStep;
+use MrNewport\LaravelFlow\Models\FlowTransition;
 
-FlowManager::actionStep($currentStep,'submit');
+FlowStep::updateOrCreate(
+    ['id' => 'proposal.review.v1'],
+    ['name' => 'Review proposal'],
+);
+
+foreach (['approve', 'reject'] as $action) {
+    FlowTransition::firstOrCreate([
+        'step_id' => 'proposal.review.v1',
+        'action' => $action,
+        'next_step_id' => 'END',
+    ]);
+}
 ```
-- If `(start_request, 'submit') => manager_review` transition exists, a new `FlowInstanceStep` is created for `manager_review`, assigned if needed, and `current_step_id` updates to `'manager_review'`.
 
-### Multiple Transitions
+The migration creates the reserved `END` definition. A transition to `END` finishes that branch without creating another instance step.
 
-One `(step_id, action)` can lead to multiple `next_step_id`:
+The definition command is an alternative:
+
+```sh
+php artisan flow:define-step proposal.review.v1 "Review proposal" \
+  --actions="approve:END,reject:END"
+```
+
+The command upserts supplied transitions; it does not delete old ones. Omitted definition options reset to their defaults. Validate application-supplied definitions before saving them.
+
+## Start and advance a workflow
+
+Use a persisted Eloquent subject whose primary key matches the configured type:
 
 ```php
-flow:define-step multi_out --actions="done:stepX,done:stepY,done:stepZ"
-```
-Now calling:
-```php
-FlowManager::actionStep($multiOutStep, 'done');
-```
-Creates **three** new steps: `stepX`, `stepY`, `stepZ`.
+use MrNewport\LaravelFlow\FlowManager;
 
-### End Step
-
-If a transition’s `next_step_id='END'`, that signals the flow is finished. `FlowInstance` is updated to `current_step_id='END'`, no further steps.
-
-### Events
-
-When you call:
-```php
-FlowManager::actionStep($oldStep,'approve');
-```
-a `FlowActionEvent($oldStep, 'approve', $newStepOrNull)` is fired. Use standard Laravel event listeners to add custom logic or extra notifications.
-
-### Notifications
-
-If `flow_steps.notify==true`, you can have your listeners automatically send out `FlowBaseNotification` or custom notifications to the assigned users/emails. Typically:
-
-- Check `flow_step_assignees` for that step.
-- If `'assignee_type=user'`, load the user’s Eloquent record from `config('flow.user_model')`.
-- If `'assignee_type=email'`, route a mail-based notification.
-
----
-
-## Console Commands
-
-### DefineStepCommand
-
-Use this command to create or update a step and define transitions in one shot:
-```bash
-php artisan flow:define-step manager_review "Manager Review" \
-    --notify=true \
-    --strategy=multi_user \
-    --params='{"user_ids":[3,5,8]}' \
-    --actions="approve:director_approval,reject:start_request"
-```
-Prints lines for each transition, then:
-```
-Step [manager_review] defined/updated successfully.
+// Run within your application's authorized transaction.
+$instance = FlowManager::startFlow('proposal.review.v1', $proposal);
+$step = $instance->steps()->whereNull('finished_at')->sole();
+$nextSteps = FlowManager::actionStep($step, 'approve');
 ```
 
----
+`startFlow(string $stepId, $entity): FlowInstance` creates an instance and its initial step. It does not deduplicate starts; the application must enforce its intended one-instance or multiple-instance rule.
 
-## Flowable Trait
+`actionStep(FlowInstanceStep $step, string $action): array` locks and completes the persisted step and creates its successors in one transaction. It returns created steps; an `END` transition contributes null.
 
-If you want to manage flows directly from an Eloquent model, you can:
+- Undefined actions throw `InvalidArgumentException` and leave the step unchanged.
+- Repeating a completed step throws `LogicException`; this is not an idempotent success response.
+- Missing successor definitions or failed assignments roll back the transition.
+- Multiple matching transitions create multiple successors. `current_step_id` records the last successor, not aggregate parallel progress. Inspect unfinished instance steps explicitly.
+- Branch joins, quorum approval, and “wait for all branches” completion are not implemented.
+
+### Model convenience methods
 
 ```php
+use Illuminate\Database\Eloquent\Model;
 use MrNewport\LaravelFlow\Traits\Flowable;
 
-class Document extends Model
+class Proposal extends Model
 {
     use Flowable;
 }
+
+$proposal->startFlow('proposal.review.v1');
+$step = $proposal->currentFlowStep();
+$proposal->flowAction('approve');
 ```
 
-Then:
+The trait exposes a single `flowInstance()` relation. `currentFlowStep()` chooses the first unfinished step; use explicit instances and steps for parallel workflows or multiple workflows per subject. `flowAction()` does nothing when no unfinished step exists.
+
+## Assignments
+
+| Strategy | Parameters | Records |
+| --- | --- | --- |
+| `single_user` | `['user_id' => 7]` | One user assignment |
+| `multi_user` | `['user_ids' => [7, 8]]` | One assignment per user |
+| `email_list` | `['emails' => ['reviewer@example.com']]` | One assignment per email |
+
+Set `assignment_strategy` and `assignment_params` on a step definition. A null strategy creates no assignments. Unknown strategy names throw `InvalidArgumentException`; they no longer silently select `single_user`.
+
+There is no custom-strategy registry. Implementing `AssignmentStrategyInterface` alone does not register a strategy with `FlowManager`. Applications can manage assignment rows through their own authorized service when the built-ins do not fit.
 
 ```php
-$doc = Document::create([...]);
-$doc->startFlow('start_request');
-
-$current = $doc->currentFlowStep();
-if($current) {
-    $doc->flowAction('submit');
-}
+$changed = FlowManager::reassignStep($step, $currentUser, [9, 10]);
 ```
 
-No direct calls to `FlowManager`.
+The user strategies allow an existing assigned user to reassign; single-user keeps only the first supplied identity. The email strategy does not permit manager-based reassignment. Validate new identities, tenant membership, and application reassignment policies. Reassignment does not acquire a transaction or row lock; wrap it in an application transaction and lock relevant records when concurrent updates are possible.
 
----
+Assignments do not authorize `actionStep()`, enforce a quorum, or prove workspace membership.
 
-## Advanced Customization
+## Events and notifications
 
-Below are **expansion** ideas purely through your **own** code (events, custom classes).
+Each successful transition dispatches `MrNewport\LaravelFlow\Events\FlowActionEvent` **after the surrounding database transaction commits**. It carries `oldStep` (the completed step), `action`, and `newStep` (the successor, or null for `END`). Rollback prevents action events from dispatching.
 
-### 1. Custom Assignment Strategies
+Applications choose listeners and side effects. Events do not include actor or tenant context automatically; retain that context in application records.
 
-If your domain requires specialized logic—like a **Token** or **Slack** approach—create a class implementing `AssignmentStrategyInterface`:
+The step's `notify` flag is metadata. Nothing is emailed automatically. Applications select authorized recipients and send `MrNewport\LaravelFlow\Notifications\FlowBaseNotification($step, $action)` or their own notification. The supplied mail view is `laravel-flow::notifications.flow_base`.
 
-```php
-namespace App\FlowAssignments;
+## Application boundaries
 
-use MrNewport\LaravelFlow\Models\FlowInstanceStep;
-use MrNewport\LaravelFlow\Models\FlowStepAssignee;
-use MrNewport\LaravelFlow\Assignments\AssignmentStrategyInterface;
+Flow is an orchestration primitive. Before starting or advancing a workflow, the application must:
 
-class SlackChannelStrategy implements AssignmentStrategyInterface
-{
-    public function __construct(protected array $params=[])
-    {
-        // e.g. $params['channel'] => '#general'
-    }
+- Resolve the subject within the current tenant/workspace and authorize the actor.
+- Resolve its related instance and expected step; do not trust arbitrary request-supplied step IDs.
+- Validate the action, expected domain version, assignment policy, and business conditions.
+- Keep domain mutation, workflow transition, and audit records in one transaction on the same database connection.
+- Preserve request-key deduplication, immutable reviewed snapshots, worker leases/fencing, and replay handling where required.
 
-    public function assign(FlowInstanceStep $instanceStep): void
-    {
-        // store the Slack channel
-        FlowStepAssignee::create([
-            'flow_instance_step_id'=>$instanceStep->id,
-            'assignee_type'=>'slack_channel',
-            'assignee_value'=>$this->params['channel']
-        ]);
-    }
+Package tables have no workspace ID or tenant scope. Instances are not automatically unique per subject, and step history is not an immutable application audit trail. The manager stores subject class names; applications using morph aliases should review their relation mapping.
 
-    public function canReassign(FlowInstanceStep $instanceStep, $currentUser): bool
-    {
-        // If you have logic for reassigning Slack channels, define here
-        return false;
-    }
+A workflow can coordinate reviewed imports or approvals while the application continues to own exact selected rows, authorization fingerprints, revision versions, and idempotent worker execution.
 
-    public function reassign(FlowInstanceStep $instanceStep, array $newAssignees): void
-    {
-        // Example: update the Slack channel
-        $instanceStep->assignees()->delete();
-        foreach($newAssignees as $chan){
-            FlowStepAssignee::create([
-                'flow_instance_step_id'=>$instanceStep->id,
-                'assignee_type'=>'slack_channel',
-                'assignee_value'=>$chan
-            ]);
-        }
-    }
-}
-```
+## Upgrade from 2.0
 
-Then reference `'slack_channel'` in your step’s `assignment_strategy` and `'assignment_params'=>{"channel":"#my-team"}`.
+No existing tables are altered. Integer subjects keep the default. Two formerly permissive behaviors now fail explicitly:
 
-### 2. Event Listeners for Step+Action Logic
+1. Actions without configured transitions throw instead of closing the step. Define an explicit `END` transition for terminal actions.
+2. Unsupported strategy names throw instead of silently selecting `single_user`. Use a built-in strategy or application-managed assignments.
 
-Whenever `FlowManager::actionStep($oldStep, 'approve')` is called, a `FlowActionEvent` fires. You can define a listener:
+The provider namespace includes `Providers`: `MrNewport\LaravelFlow\Providers\FlowServiceProvider`. There are no bundled stubs to publish.
 
-```php
-use MrNewport\LaravelFlow\Events\FlowActionEvent;
+## Tests
 
-Event::listen(FlowActionEvent::class, function(FlowActionEvent $e){
-  if($e->oldStep->step_id==='manager_review' && $e->action==='approve') {
-    // E.g. log something or call external API
-  }
-});
-```
-
-No need to modify package code—**you** handle domain logic in your event listener.
-
-### 3. Larger Example: 6+ Steps, Complex Branching
-
-Suppose you define these steps: `stepA`, `stepB`, `stepC`, `stepD`, `stepE`, `stepF`, and `END`. You can do:
-
-```
-flow:define-step stepA "Step A" --actions="go:stepB,skip:stepC"
-flow:define-step stepB "Step B" --actions="approve:stepD,reject:END"
-flow:define-step stepC "Step C" --actions="done:stepD"
-flow:define-step stepD "Step D" --actions="approve:stepE, reject:stepB"
-flow:define-step stepE "Step E" --actions="all_good:stepF, revision:stepC"
-flow:define-step stepF "Step F" --actions="finalize:END"
-flow:define-step END "Flow End"
-```
-
-Now you have a multi-branch flow with looping between stepB/stepD if rejections happen, or skipping stepB by going stepA → skip → stepC. No domain constraints, purely structured in your transitions.
-
-### 4. Rejection Actions and External Approvals
-
-If you set `config('flow.rejection_actions')=['reject','cancel']`, any step completed with `'reject'` or `'cancel'` is considered a rejection. You can add a step for `'supplier_upload'` with transitions `'action=reject => rework_assets'`. That flow logic is fully under your control. If you want external e-sign or approval, store the token or link in `assignment_params` and let the user finalize externally.
-
-### 5. Integrating with External Services
-
-Each time a new step is created, you could:
-
-- **Post** to Slack with the assigned user info.
-- **Call** an external DocuSign or HelloSign API to request a signature.
-- **Send** events to a microservice queue.
-
-All done **in your** listeners or custom code that runs upon step creation.
-
-### 6. Additional Notifications & Channels
-
-**`FlowBaseNotification`** is a mail-based example. You can define:
-
-- `FlowSlackNotification`: `via()` returns `[SlackChannel::class]`, posting a Slack message.
-- `FlowSmsNotification`: using Twilio or Nexmo.
-- **No** changes in the package are required. You just create these in your app code and send them from an event listener or a custom approach.
-
----
-
-## Testing
-
-A **comprehensive** test suite lives in `tests/`. Just run:
-
-```bash
-composer test
-```
-
-It covers:
-
-- **`DefineStepCommandTest`**: verifying creation of steps & transitions with exact console output.
-- **`FlowManagerBasicTest`**: tests `startFlow` & single-step transitions.
-- **`FlowManagerAssignmentTest`**: ensures assignment & reassign logic works.
-- **`FlowManagerMultiTransitionsTest`**: multiple next steps for one action.
-- **`FlowEventTest`**: verifies `FlowActionEvent` is fired.
-- **`FlowNotificationTest`**: demonstrates how notifications can be triggered for assigned users/emails.
-
----
+Run `composer test` in the package checkout. Tests cover transactions, invalid and repeated actions, assignments, events, notifications, commands, and integer/UUID/ULID subject relationships. CI also runs isolated MySQL schema/transition/rollback tests and fresh Laravel consumers with production dependencies only for all three key types.
 
 ## License
 
-This package is open-sourced software licensed under the [MIT license](LICENSE). Enjoy building **fully** domain-agnostic flows for your Laravel application!
+MIT.
