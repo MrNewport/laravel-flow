@@ -1,0 +1,17 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+    databaseMigrationsPath:
+        - src/database/migrations
+    paths:
+        - src
+        - tests/Support/FlowSubject.php
+    excludePaths:
+        - src/resources
+        - src/lang
+        - src/database
+    tmpDir: .phpstan-cache
+    viewDirectories:
+        - src/resources/views

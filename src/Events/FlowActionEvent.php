@@ -2,22 +2,25 @@
 
 namespace MrNewport\LaravelFlow\Events;
 
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use MrNewport\LaravelFlow\Models\FlowInstanceStep;
 
-class FlowActionEvent implements \Illuminate\Contracts\Events\ShouldDispatchAfterCommit
+class FlowActionEvent implements ShouldDispatchAfterCommit
 {
     use Dispatchable, SerializesModels;
 
     public FlowInstanceStep $oldStep;
+
     public string $action;
+
     public ?FlowInstanceStep $newStep;
 
     public function __construct(FlowInstanceStep $oldStep, string $action, ?FlowInstanceStep $newStep)
     {
         $this->oldStep = $oldStep;
-        $this->action  = $action;
+        $this->action = $action;
         $this->newStep = $newStep;
     }
 }

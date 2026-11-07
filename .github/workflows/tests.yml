@@ -10,12 +10,15 @@ jobs:
       matrix:
         include:
           - {php: '8.2', laravel: '^12.0', testbench: '^10.0'}
+          - {php: '8.3', laravel: '^12.0', testbench: '^10.0'}
+          - {php: '8.4', laravel: '^12.0', testbench: '^10.0'}
+          - {php: '8.5', laravel: '^12.0', testbench: '^10.0'}
           - {php: '8.3', laravel: '^13.0', testbench: '^11.0'}
           - {php: '8.4', laravel: '^13.0', testbench: '^11.0'}
           - {php: '8.5', laravel: '^13.0', testbench: '^11.0'}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: ${{ matrix.php }}
           tools: composer:v2
@@ -40,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {path: package}
-      - uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: '8.3'
           tools: composer:v2
@@ -51,7 +54,7 @@ jobs:
         env:
           FLOW_MORPH_KEY_TYPE: ${{ matrix.morph-key-type }}
         run: |
-          php -r '$p=json_decode(file_get_contents("composer.json"),true); unset($p["require-dev"]); $p["repositories"]=[["type"=>"path","url"=>"../package","options"=>["symlink"=>false,"versions"=>["mrnewport/laravel-flow"=>"2.1.0"]]]]; $p["require"]["mrnewport/laravel-flow"]="^2.1"; file_put_contents("composer.json",json_encode($p,JSON_PRETTY_PRINT));'
+          php -r '$p=json_decode(file_get_contents("composer.json"),true); unset($p["require-dev"]); $p["repositories"]=[["type"=>"path","url"=>"../package","options"=>["symlink"=>false,"versions"=>["mrnewport/laravel-flow"=>"2.2.0"]]]]; $p["require"]["mrnewport/laravel-flow"]="^2.2"; file_put_contents("composer.json",json_encode($p,JSON_PRETTY_PRINT));'
           php -r 'file_put_contents("config/flow.php", "<?php return ".var_export(["morph_key_type"=>getenv("FLOW_MORPH_KEY_TYPE")],true).";");'
           cp .env.example .env
           touch database/database.sqlite
@@ -77,14 +80,59 @@ jobs:
           --health-interval=10s --health-timeout=5s --health-retries=10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: '8.3'
           tools: composer:v2
           extensions: pdo_mysql, pdo_sqlite, dom, mbstring
           coverage: none
       - run: composer update --no-interaction --prefer-dist --no-progress
-      - run: vendor/bin/pest --filter='migrates and rolls back on MySQL'
+      - run: composer test
         env:
           MYSQL_TEST_DATABASE: package_test
           MYSQL_TEST_PASSWORD: package-test-only
+      - name: Create disposable full-suite database
+        run: php -r '$pdo=new PDO("mysql:host=127.0.0.1;port=3306","root","package-test-only"); $pdo->exec("CREATE DATABASE flow_all_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");'
+      - run: composer test
+        env:
+          FLOW_ALL_MYSQL_TEST_DATABASE: flow_all_test
+          MYSQL_TEST_DATABASE: package_test
+          MYSQL_TEST_PASSWORD: package-test-only
+
+  quality:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          extensions: pdo_sqlite, dom, mbstring
+          coverage: none
+      - run: composer update --no-interaction --prefer-dist --no-progress
+      - run: composer format:check
+      - run: composer analyse
+  minimum:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {php: '8.2', laravel: '^12.0', testbench: '^10.0'}
+          - {php: '8.3', laravel: '^13.0', testbench: '^11.0'}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+          extensions: pdo_sqlite, dom, mbstring
+          coverage: none
+      - name: Resolve lowest compatible supported dependencies
+        env:
+          LARAVEL_VERSION: ${{ matrix.laravel }}
+          TESTBENCH_VERSION: ${{ matrix.testbench }}
+        run: |
+          composer require --dev "laravel/framework:$LARAVEL_VERSION" "orchestra/testbench:$TESTBENCH_VERSION" --no-update
+          composer update --prefer-lowest --prefer-stable --with-all-dependencies --no-interaction --prefer-dist --no-progress
+      - run: composer test

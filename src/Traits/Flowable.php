@@ -2,44 +2,53 @@
 
 namespace MrNewport\LaravelFlow\Traits;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use MrNewport\LaravelFlow\FlowManager;
 use MrNewport\LaravelFlow\Models\FlowInstance;
 use MrNewport\LaravelFlow\Models\FlowInstanceStep;
-use MrNewport\LaravelFlow\FlowManager;
 
+/** @phpstan-require-extends Model */
 trait Flowable
 {
+    /** @return HasOne<FlowInstance, $this> */
     public function flowInstance(): HasOne
     {
-        return $this->hasOne(FlowInstance::class,'model_id')
-            ->where('model_type','=',static::class);
+        return $this->hasOne(FlowInstance::class, 'model_id')
+            ->whereIn('model_type', array_unique([(string) $this->getMorphClass(), static::class]));
     }
 
     public function startFlow(string $stepId)
     {
-        return FlowManager::startFlow($stepId,$this);
+        $instance = FlowManager::startFlow($stepId, $this);
+        $this->unsetRelation('flowInstance');
+
+        return $instance;
     }
 
-    public function currentFlowStep()
+    public function currentFlowStep(): ?FlowInstanceStep
     {
-        if($this->flowInstance){
-            return $this->flowInstance->steps()
+        $instance = $this->flowInstance()->first();
+        if ($instance) {
+            return $instance->steps()
                 ->whereNull('finished_at')
+                ->orderBy('id')
                 ->first();
         }
+
         return null;
     }
 
     public function flowAction(string $action)
     {
         $step = $this->currentFlowStep();
-        if($step){
-            FlowManager::actionStep($step,$action);
+        if ($step) {
+            FlowManager::actionStep($step, $action);
         }
     }
 
     public function flowReassign(FlowInstanceStep $step, $currentUser, array $newAssignees)
     {
-        return FlowManager::reassignStep($step,$currentUser,$newAssignees);
+        return FlowManager::reassignStep($step, $currentUser, $newAssignees, $this);
     }
 }

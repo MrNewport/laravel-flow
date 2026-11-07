@@ -1,9 +1,7 @@
 @component('mail::message')
+<p>{{ __('laravel-flow::messages.actioned', ['step' => \MrNewport\LaravelFlow\Support\NotificationText::singleLine($step->step_id), 'action' => \MrNewport\LaravelFlow\Support\NotificationText::singleLine($action)]) }}</p>
 
-    Step **{{ $step->step_id }}** was actioned with: **{{ $action }}**.
-
-    @component('mail::button', ['url'=>config('app.url')])
-        View Flow
-    @endcomponent
-
+@component('mail::button', ['url' => config('app.url')])
+{{ __('laravel-flow::messages.view_flow') }}
+@endcomponent
 @endcomponent

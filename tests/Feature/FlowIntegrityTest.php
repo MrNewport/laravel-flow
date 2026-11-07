@@ -1,23 +1,42 @@
 <?php
 
-use MrNewport\LaravelFlow\FlowManager;
-use MrNewport\LaravelFlow\Models\{FlowStep, FlowTransition, FlowInstance, FlowInstanceStep};
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\ServiceProvider;
 use MrNewport\LaravelFlow\Events\FlowActionEvent;
+use MrNewport\LaravelFlow\FlowManager;
+use MrNewport\LaravelFlow\Models\FlowInstance;
+use MrNewport\LaravelFlow\Models\FlowInstanceStep;
+use MrNewport\LaravelFlow\Models\FlowStep;
+use MrNewport\LaravelFlow\Models\FlowTransition;
+use MrNewport\LaravelFlow\Providers\FlowServiceProvider;
+use MrNewport\LaravelFlow\Tests\Support\MockUser;
 
 it('rolls back a missing start step', function () {
-    $entity = new class { public function getKey() { return 1; } };
-    expect(fn () => FlowManager::startFlow('missing', $entity))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    $entity = new class
+    {
+        public function getKey()
+        {
+            return 1;
+        }
+    };
+    expect(fn () => FlowManager::startFlow('missing', $entity))->toThrow(ModelNotFoundException::class);
     expect(FlowInstance::count())->toBe(0);
 });
 
 it('rolls back a failed transition and rejects duplicate completion', function () {
     FlowStep::create(['id' => 'start']);
     FlowTransition::create(['step_id' => 'start', 'action' => 'go', 'next_step_id' => 'missing']);
-    $entity = new class { public function getKey() { return 1; } };
+    $entity = new class
+    {
+        public function getKey()
+        {
+            return 1;
+        }
+    };
     $flow = FlowManager::startFlow('start', $entity);
     $step = $flow->steps()->first();
-    expect(fn () => FlowManager::actionStep($step, 'go'))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    expect(fn () => FlowManager::actionStep($step, 'go'))->toThrow(ModelNotFoundException::class);
     expect($step->fresh()->finished_at)->toBeNull()->and(FlowInstanceStep::count())->toBe(1);
     FlowStep::create(['id' => 'missing']);
     FlowManager::actionStep($step, 'go');
@@ -27,7 +46,7 @@ it('rolls back a failed transition and rejects duplicate completion', function (
 
 it('registers actual config and notification view paths', function () {
     expect(view()->exists('laravel-flow::notifications.flow_base'))->toBeTrue();
-    $paths = \Illuminate\Support\ServiceProvider::pathsToPublish(\MrNewport\LaravelFlow\Providers\FlowServiceProvider::class, 'flow-config');
+    $paths = ServiceProvider::pathsToPublish(FlowServiceProvider::class, 'flow-config');
     foreach ($paths as $source => $destination) {
         expect(is_file($source))->toBeTrue();
     }
@@ -38,7 +57,7 @@ it('preserves a pending step and emits no event for an undefined action', functi
     Event::fake([FlowActionEvent::class]);
     FlowStep::create(['id' => 'review']);
     FlowTransition::create(['step_id' => 'review', 'action' => 'approve', 'next_step_id' => 'END']);
-    $flow = FlowManager::startFlow('review', new \MrNewport\LaravelFlow\Tests\Support\MockUser(12));
+    $flow = FlowManager::startFlow('review', new MockUser(12));
     $step = $flow->steps()->sole();
 
     expect(fn () => FlowManager::actionStep($step, 'typo'))->toThrow(InvalidArgumentException::class);
@@ -57,7 +76,7 @@ it('preserves a pending step and emits no event for an undefined action', functi
 it('rolls back a flow whose initial assignment strategy is unsupported', function () {
     FlowStep::create(['id' => 'review', 'assignment_strategy' => 'custom_review']);
 
-    expect(fn () => FlowManager::startFlow('review', new \MrNewport\LaravelFlow\Tests\Support\MockUser(12)))
+    expect(fn () => FlowManager::startFlow('review', new MockUser(12)))
         ->toThrow(InvalidArgumentException::class, 'Unsupported flow assignment strategy: custom_review');
 
     expect(FlowInstance::count())->toBe(0)->and(FlowInstanceStep::count())->toBe(0);
@@ -68,7 +87,7 @@ it('rolls back completion when the next assignment strategy is unsupported', fun
     FlowStep::create(['id' => 'start']);
     FlowStep::create(['id' => 'review', 'assignment_strategy' => 'custom_review']);
     FlowTransition::create(['step_id' => 'start', 'action' => 'submit', 'next_step_id' => 'review']);
-    $flow = FlowManager::startFlow('start', new \MrNewport\LaravelFlow\Tests\Support\MockUser(12));
+    $flow = FlowManager::startFlow('start', new MockUser(12));
     $step = $flow->steps()->sole();
 
     expect(fn () => FlowManager::actionStep($step, 'submit'))->toThrow(InvalidArgumentException::class);

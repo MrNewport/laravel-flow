@@ -3,42 +3,26 @@
 namespace MrNewport\LaravelFlow\Assignments;
 
 use MrNewport\LaravelFlow\Models\FlowInstanceStep;
-use MrNewport\LaravelFlow\Models\FlowStepAssignee;
 
 class SingleUserStrategy implements AssignmentStrategyInterface
 {
-    public function __construct(protected array $params=[])
-    {
-    }
+    public function __construct(protected array $params = []) {}
 
     public function assign(FlowInstanceStep $instanceStep): void
     {
-        if(isset($this->params['user_id'])){
-            FlowStepAssignee::create([
-                'flow_instance_step_id' => $instanceStep->id,
-                'assignee_type'         => 'user',
-                'assignee_value'        => (string)$this->params['user_id']
-            ]);
-        }
+        $identities = isset($this->params['user_id']) ? AssignmentValues::users([$this->params['user_id']]) : [];
+        AssignmentMutation::write($instanceStep, 'user', $identities, false);
     }
 
     public function canReassign(FlowInstanceStep $instanceStep, $currentUser): bool
     {
-        return $instanceStep->assignees()
-            ->where('assignee_type','user')
-            ->where('assignee_value',(string)$currentUser->id)
-            ->exists();
+        return AssignmentMutation::containsUser($instanceStep, $currentUser);
     }
 
     public function reassign(FlowInstanceStep $instanceStep, array $newAssignees): void
     {
-        $instanceStep->assignees()->delete();
-        if(!empty($newAssignees)){
-            FlowStepAssignee::create([
-                'flow_instance_step_id'=>$instanceStep->id,
-                'assignee_type'=>'user',
-                'assignee_value'=>(string)$newAssignees[0]
-            ]);
-        }
+        // Retain the single-user API's first-selection convention, validating the whole list.
+        $identities = AssignmentValues::users($newAssignees);
+        AssignmentMutation::write($instanceStep, 'user', array_slice($identities, 0, 1), true);
     }
 }

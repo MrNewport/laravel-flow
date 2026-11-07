@@ -4,7 +4,7 @@ namespace MrNewport\LaravelFlow\Tests\Support;
 
 class MockUser
 {
-    public function __construct(public int $id){}
+    public function __construct(public int $id) {}
 
     public function getKey()
     {

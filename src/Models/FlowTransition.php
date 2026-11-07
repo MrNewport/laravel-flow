@@ -3,23 +3,49 @@
 namespace MrNewport\LaravelFlow\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property string $step_id
+ * @property string $action
+ * @property string $next_step_id
+ */
 class FlowTransition extends Model
 {
     protected $table = 'flow_transitions';
+
     public $timestamps = false;
 
-    protected $fillable = [
-        'step_id','action','next_step_id'
-    ];
+    public $incrementing = false;
 
-    public function step()
+    // The existing unique tuple is the persistence identity; no saved-data rewrite is needed.
+    protected function setKeysForSaveQuery($query)
     {
-        return $this->belongsTo(FlowStep::class,'step_id','id');
+        foreach (['step_id', 'action', 'next_step_id'] as $column) {
+            $query->where($column, $this->getRawOriginal($column) ?? $this->getAttribute($column));
+        }
+
+        return $query;
     }
 
-    public function nextStep()
+    protected function setKeysForSelectQuery($query)
     {
-        return $this->belongsTo(FlowStep::class,'next_step_id','id');
+        return $this->setKeysForSaveQuery($query);
+    }
+
+    protected $fillable = [
+        'step_id', 'action', 'next_step_id',
+    ];
+
+    /** @return BelongsTo<FlowStep, $this> */
+    public function step(): BelongsTo
+    {
+        return $this->belongsTo(FlowStep::class, 'step_id', 'id');
+    }
+
+    /** @return BelongsTo<FlowStep, $this> */
+    public function nextStep(): BelongsTo
+    {
+        return $this->belongsTo(FlowStep::class, 'next_step_id', 'id');
     }
 }

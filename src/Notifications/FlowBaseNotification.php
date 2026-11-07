@@ -3,9 +3,10 @@
 namespace MrNewport\LaravelFlow\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
 use MrNewport\LaravelFlow\Models\FlowInstanceStep;
+use MrNewport\LaravelFlow\Support\NotificationText;
 
 class FlowBaseNotification extends Notification
 {
@@ -14,7 +15,7 @@ class FlowBaseNotification extends Notification
     public function __construct(
         public FlowInstanceStep $step,
         public string $action
-    ){}
+    ) {}
 
     public function via($notifiable)
     {
@@ -24,10 +25,13 @@ class FlowBaseNotification extends Notification
     public function toMail($notifiable)
     {
         return (new MailMessage)
-            ->subject("Flow Step: {$this->step->step_id} Action: {$this->action}")
+            ->subject(__('laravel-flow::messages.subject', [
+                'step' => NotificationText::singleLine($this->step->step_id),
+                'action' => NotificationText::singleLine($this->action),
+            ]))
             ->markdown('laravel-flow::notifications.flow_base', [
-                'step'   => $this->step,
-                'action' => $this->action
+                'step' => $this->step,
+                'action' => $this->action,
             ]);
     }
 }

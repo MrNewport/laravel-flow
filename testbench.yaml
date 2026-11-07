@@ -1,0 +1,2 @@
+providers:
+    - MrNewport\LaravelFlow\Providers\FlowServiceProvider

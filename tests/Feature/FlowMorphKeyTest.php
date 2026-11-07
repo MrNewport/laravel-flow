@@ -27,6 +27,9 @@ it('migrates and resolves a subject using the configured key type', function (st
     FlowTransition::create(['step_id' => 'review', 'action' => 'approve', 'next_step_id' => 'END']);
     $flow = FlowManager::startFlow('review', $subject);
 
+    if (Schema::getConnection()->getDriverName() === 'mysql') {
+        $columnType = $type === 'int' ? 'bigint' : 'char';
+    }
     expect(Schema::getColumnType('flow_instances', 'model_id'))->toBe($columnType)
         ->and((string) $flow->fresh()->model_id)->toBe((string) $id)
         ->and($flow->fresh()->entity->is($subject))->toBeTrue()
@@ -53,9 +56,10 @@ it('rejects invalid key configuration before creating any package tables', funct
 });
 
 it('does not convert existing tables when the configuration changes', function () {
-    expect(Schema::getColumnType('flow_instances', 'model_id'))->toBe('integer');
+    $columnType = Schema::getConnection()->getDriverName() === 'mysql' ? 'bigint' : 'integer';
+    expect(Schema::getColumnType('flow_instances', 'model_id'))->toBe($columnType);
     config(['flow.morph_key_type' => 'uuid']);
 
     expect(Artisan::call('migrate', ['--force' => true]))->toBe(0)
-        ->and(Schema::getColumnType('flow_instances', 'model_id'))->toBe('integer');
+        ->and(Schema::getColumnType('flow_instances', 'model_id'))->toBe($columnType);
 });

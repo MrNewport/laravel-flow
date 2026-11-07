@@ -9,12 +9,20 @@ return [
     */
     'morph_key_type' => 'int',
 
+    // Bound one action/assignment operation before writing or expanding its results.
+    'max_transitions_per_action' => 1000,
+    'max_assignments' => 250,
+
+    // Full reviewed conversion is atomic. Larger installations can explicitly raise this
+    // maintenance budget after checking preview counts, duration and database lock capacity.
+    'max_morph_conversion_rows' => 100000,
+
     /*
     |--------------------------------------------------------------------------
     | Default Eloquent User Model
     |--------------------------------------------------------------------------
     */
-    'user_model' => \App\Models\User::class,
+    'user_model' => 'App\\Models\\User',
 
     /*
     |--------------------------------------------------------------------------
@@ -24,6 +32,6 @@ return [
     */
     'rejection_actions' => [
         'reject',
-        'cancel'
+        'cancel',
     ],
 ];
