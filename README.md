@@ -2,6 +2,8 @@
 
 Transactional workflow steps, transitions, assignment records and after-commit action events for Laravel. Use the engine independently, or compose it with Laravel Workflow for scoped runs, immutable definitions, command replay and audited history.
 
+**[Interactive workshop](https://matthewnewport.com/packages/laravel-flow/lab)** — Try guided examples in your browser.
+
 ```sh
 composer require mrnewport/laravel-flow:^2.2
 php artisan vendor:publish --tag=flow-config
