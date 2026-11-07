@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.1 — 2026-11-06
+
+- Align the assignment regression fixture with package formatting checks. Runtime behavior is unchanged from 2.2.0.
+
 ## 2.2.0 — 2026-11-06
 
 - Mandatory model writes reject observer vetoes and preserve transaction atomicity across steps, assignments and definition commands.
