@@ -148,7 +148,7 @@ class FlowManagerAssignmentTest extends TestCase
 
         $result = FlowManager::reassignStep($instanceStep, $userNotInStep, ['7']);
         $this->assertFalse($result);
-        $this->assertDatabaseHas('flow_step_assignees',[
+        $this->assertDatabaseHas('flow_step_assignees', [
             'assignee_value' => '10',
         ]);
     }
